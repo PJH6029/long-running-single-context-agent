@@ -8,6 +8,7 @@ from .agents.runner import RepoAgentRunner, build_memory_backend
 from .bench.adapters import SWEBenchVerifiedAdapter, SWECIAdapter
 from .bench.mixers import PilotEpisodeBuilder
 from .bench.types import EpisodeMetrics
+from .bench.v0_1 import default_manifest_path, default_output_root, prepare_v0_1_dataset
 from .config import load_config
 from .utils import ensure_directory, read_json, write_json
 
@@ -18,6 +19,13 @@ def main() -> None:
 
     build_parser = subparsers.add_parser("build-episodes", help="Build mixed pilot episodes")
     build_parser.add_argument("--config", required=True)
+
+    prepare_parser = subparsers.add_parser(
+        "prepare-v0_1",
+        help="Materialize the curated v0.1 sampled benchmark from pinned upstream commits",
+    )
+    prepare_parser.add_argument("--manifest", default=str(default_manifest_path()))
+    prepare_parser.add_argument("--output-root", default=str(default_output_root()))
 
     single_parser = subparsers.add_parser("run-single", help="Run a single task sanity check")
     single_parser.add_argument("--config", required=True)
@@ -38,6 +46,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "build-episodes":
         build_episodes(args.config)
+    elif args.command == "prepare-v0_1":
+        prepare_v0_1(args.manifest, args.output_root)
     elif args.command == "run-single":
         run_single(args.config, args.source, args.task_id, args.memory_mode)
     elif args.command == "run-mixed":
@@ -61,6 +71,10 @@ def build_episodes(config_path: str) -> Path:
     episodes = builder.build(swe_bench_tasks, swe_ci_tasks)
     output_dir = ensure_directory(Path(config.output_dir))
     return builder.write(output_dir, episodes)
+
+
+def prepare_v0_1(manifest_path: str, output_root: str) -> Path:
+    return prepare_v0_1_dataset(manifest_path=manifest_path, output_root=output_root)
 
 
 def run_single(config_path: str, source: str, task_id: str, memory_mode: str) -> Path:

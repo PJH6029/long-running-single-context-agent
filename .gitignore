@@ -5,5 +5,6 @@ __pycache__/
 .task-memory/
 *.egg-info/
 .omx/
+.cache/
 related_works/A-mem-sys/
 related_works/awesome-lifelong-llm-agent/

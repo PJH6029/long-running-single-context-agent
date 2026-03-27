@@ -1,0 +1,171 @@
+{
+  "swe_bench_verified": [
+    {
+      "change_summary": "Require a non-empty blueprint name.",
+      "repo_checkout": "7ee9ceb71e868944a46e1ff00b506772a53a4f1d",
+      "repo_id": "pallets/flask",
+      "repo_url": "https://github.com/pallets/flask.git",
+      "setup_cmds": [],
+      "split": "dev",
+      "target_file": "src/flask/blueprints.py",
+      "target_symbol": "Blueprint.__init__",
+      "task_id": "pallets__flask-5014",
+      "task_prompt": "Upstream SWE-bench Verified task `pallets__flask-5014`: require a non-empty name for Blueprints. Things do not work correctly if a Blueprint is given an empty name. Raise a `ValueError` when `name` is empty. This v0.1 micro-benchmark checks only the focused regression in `src/flask/blueprints.py`.",
+      "upstream_task_id": "pallets__flask-5014",
+      "verify_spec": {
+        "must_contain": [
+          "if not name:",
+          "'name' may not be empty."
+        ],
+        "path": "src/flask/blueprints.py"
+      }
+    },
+    {
+      "change_summary": "Do not send session headers whose value is None.",
+      "repo_checkout": "3c88e520da24ae6f736929a750876e7654accc3d",
+      "repo_id": "psf/requests",
+      "repo_url": "https://github.com/psf/requests.git",
+      "setup_cmds": [],
+      "split": "dev",
+      "target_file": "requests/sessions.py",
+      "target_symbol": "merge_setting",
+      "task_id": "psf__requests-1921",
+      "task_prompt": "Upstream SWE-bench Verified task `psf__requests-1921`: removing a default header of a session should work when the header value is set to `None`. Update the session-setting merge logic so `None` values are filtered out before the merged mapping is returned. This v0.1 micro-benchmark checks only the targeted regression in `requests/sessions.py`.",
+      "upstream_task_id": "psf__requests-1921",
+      "verify_spec": {
+        "must_contain": [
+          "if v is not None"
+        ],
+        "must_match_regex": [
+          "merged_setting\\s*=\\s*.*if\\s+v\\s+is\\s+not\\s+None"
+        ],
+        "path": "requests/sessions.py"
+      }
+    },
+    {
+      "change_summary": "Reject host labels that begin with a dot as invalid URLs.",
+      "repo_checkout": "39d0fdd9096f7dceccbc8f82e1eda7dd64717a8e",
+      "repo_id": "psf/requests",
+      "repo_url": "https://github.com/psf/requests.git",
+      "setup_cmds": [],
+      "split": "eval",
+      "target_file": "requests/models.py",
+      "target_symbol": "PreparedRequest.prepare_url",
+      "task_id": "psf__requests-5414",
+      "task_prompt": "Upstream SWE-bench Verified task `psf__requests-5414`: requesting a URL like `http://.example.com` should raise `InvalidURL` instead of leaking a `UnicodeError`. Tighten invalid-host validation so leading dots are rejected. This v0.1 micro-benchmark checks only the targeted regression in `requests/models.py`.",
+      "upstream_task_id": "psf__requests-5414",
+      "verify_spec": {
+        "must_match_regex": [
+          "host\\.startswith\\([^\\n]*[uU]?[\\\"']\\\\.[\\\"']"
+        ],
+        "path": "requests/models.py"
+      }
+    },
+    {
+      "change_summary": "Preserve proxy auth when reconstructing the netloc.",
+      "repo_checkout": "0192aac24123735b3eaf9b08df46429bb770c283",
+      "repo_id": "psf/requests",
+      "repo_url": "https://github.com/psf/requests.git",
+      "setup_cmds": [],
+      "split": "eval",
+      "target_file": "requests/utils.py",
+      "target_symbol": "prepend_scheme_if_needed",
+      "task_id": "psf__requests-6028",
+      "task_prompt": "Upstream SWE-bench Verified task `psf__requests-6028`: fix the proxy authentication regression by preserving auth information when reconstructing a URL netloc. This v0.1 micro-benchmark checks only the targeted regression in `requests/utils.py`.",
+      "upstream_task_id": "psf__requests-6028",
+      "verify_spec": {
+        "must_contain": [
+          "if auth:",
+          "netloc = '@'.join([auth, netloc])"
+        ],
+        "path": "requests/utils.py"
+      }
+    }
+  ],
+  "swe_ci": [
+    {
+      "change_summary": "Automatically urlencode invalid query strings and keep UTF-8 quoting safe.",
+      "repo_checkout": "3bcbb25f6b15d23fe79de34389363b0c5f078a82",
+      "repo_id": "oauthlib/oauthlib",
+      "repo_url": "https://github.com/oauthlib/oauthlib.git",
+      "setup_cmds": [],
+      "split": "dev",
+      "target_file": "oauthlib/common.py",
+      "target_sha": "bf0241bc62f46badd4a0e55f820c0b95cad29ad3",
+      "target_symbol": "quote / urldecode",
+      "task_id": "oauthlib__oauthlib__3bcbb2__bf0241",
+      "task_prompt": "Upstream SWE-CI sampled micro-task `oauthlib__oauthlib__3bcbb2__bf0241`: automatic urlencoding of input. Update `oauthlib/common.py` so query strings with invalid raw characters are urlencoded instead of rejected, and keep UTF-8 quoting behavior correct. This local v0.1 benchmark checks only the focused regression in that file.",
+      "upstream_task_id": "oauthlib__oauthlib__3bcbb2__bf0241",
+      "verify_spec": {
+        "must_contain": [
+          "query = quote(query)",
+          "s = _quote(s.encode('utf-8'), safe)"
+        ],
+        "path": "oauthlib/common.py"
+      }
+    },
+    {
+      "change_summary": "Improve DebianControlLexer whitespace and package-list handling.",
+      "repo_checkout": "eeb568d214a0ce252509915fb28f13b417c5162c",
+      "repo_id": "pygments/pygments",
+      "repo_url": "https://github.com/pygments/pygments.git",
+      "setup_cmds": [],
+      "split": "dev",
+      "target_file": "pygments/lexers/installers.py",
+      "target_sha": "35732f8a538ed7faa9ca90d48bb02ae882793bef",
+      "target_symbol": "DebianControlLexer",
+      "task_id": "pygments__pygments__eeb568__35732f",
+      "task_prompt": "Upstream SWE-CI sampled micro-task `pygments__pygments__eeb568__35732f`: improve whitespace handling in `DebianControlLexer`. Update `pygments/lexers/installers.py` so field punctuation and whitespace are tokenized more precisely and package-list continuations are handled correctly. This local v0.1 benchmark checks only the focused lexer change in that file.",
+      "upstream_task_id": "pygments__pygments__eeb568__35732f",
+      "verify_spec": {
+        "must_contain": [
+          "bygroups(Keyword, Punctuation, Whitespace)",
+          "package_list",
+          "Breaks|Replaces|Provides|Conflicts"
+        ],
+        "path": "pygments/lexers/installers.py"
+      }
+    },
+    {
+      "change_summary": "Treat HTTP 201 as a successful token-exchange response.",
+      "repo_checkout": "281fd4765e0fc2efaf2039d248c3bc0698416a8a",
+      "repo_id": "modelcontextprotocol/python-sdk",
+      "repo_url": "https://github.com/modelcontextprotocol/python-sdk.git",
+      "setup_cmds": [],
+      "split": "eval",
+      "target_file": "src/mcp/client/auth/oauth2.py",
+      "target_sha": "a9cc822a1051b1bd2b6b9b57e9e4136406983b61",
+      "target_symbol": "OAuthClientProvider._handle_token_response",
+      "task_id": "modelcontextprotocol__python-sdk__281fd4__a9cc82",
+      "task_prompt": "Upstream SWE-CI sampled micro-task `modelcontextprotocol__python-sdk__281fd4__a9cc82`: accept HTTP 201 in the OAuth token exchange path. Update `src/mcp/client/auth/oauth2.py` so a 201 response is handled as success instead of raising an OAuth token error. This local v0.1 benchmark checks only that focused regression.",
+      "upstream_task_id": "modelcontextprotocol__python-sdk__281fd4__a9cc82",
+      "verify_spec": {
+        "must_contain": [
+          "response.status_code not in {200, 201}"
+        ],
+        "path": "src/mcp/client/auth/oauth2.py"
+      }
+    },
+    {
+      "change_summary": "Make InitSettingsSource alias resolution deterministic.",
+      "repo_checkout": "e1629080542ffab481030a7a100b820556f2695f",
+      "repo_id": "pydantic/pydantic-settings",
+      "repo_url": "https://github.com/pydantic/pydantic-settings.git",
+      "setup_cmds": [],
+      "split": "eval",
+      "target_file": "pydantic_settings/sources/base.py",
+      "target_sha": "0497ef23314dbd63ea41d07ab9c301e628f2f9f9",
+      "target_symbol": "InitSettingsSource.__init__",
+      "task_id": "pydantic__pydantic-settings__e16290__0497ef",
+      "task_prompt": "Upstream SWE-CI sampled micro-task `pydantic__pydantic-settings__e16290__0497ef`: make `InitSettingsSource` resolution deterministic. Update `pydantic_settings/sources/base.py` so alias selection preserves the first provided matching alias instead of consuming an arbitrary set element. This local v0.1 benchmark checks only the focused regression in that file.",
+      "upstream_task_id": "pydantic__pydantic-settings__e16290__0497ef",
+      "verify_spec": {
+        "must_contain": [
+          "preferred_set_alias = next(alias for alias in alias_names if alias in init_kwarg_name)",
+          "init_kwargs[preferred_set_alias]"
+        ],
+        "path": "pydantic_settings/sources/base.py"
+      }
+    }
+  ]
+}

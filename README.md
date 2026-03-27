@@ -10,9 +10,15 @@ The working hypothesis is simple:
 
 ## What Is Implemented Today
 
-This repo currently contains a `v0` pilot benchmark for interleaved coding tasks.
+This repo currently contains two small benchmark setups for interleaved coding tasks.
 
-- Source task families: fixture-shaped `SWE-bench Verified` and `SWE-CI`
+- `v0` fixture pilot:
+  - source task families: fixture-shaped `SWE-bench Verified` and `SWE-CI`
+  - intended for validating memory-mode behavior and runner mechanics
+- `v0.1` sampled micro-benchmark:
+  - source task families: real sampled task IDs from `SWE-bench Verified` and `SWE-CI`
+  - repo snapshots are exported from pinned upstream commits
+  - evaluation is normalized to narrow local regression checks, not the official full harness
 - Domain: Python repository tasks only
 - Mixing policy: one task from each source benchmark, interleaved with strict round robin scheduling
 - Slice granularity: one atomic agent iteration per task switch
@@ -90,6 +96,9 @@ scripts/
   run_tests.py
 configs/
   pilot_fixture.toml
+  v0_1_realistic_codex.toml
+benchmark_samples/
+  v0_1_realistic.json
 tests/
   fixtures/
   test_*.py
@@ -125,11 +134,30 @@ Run the Codex CLI baseline on the same fixture benchmark:
 python3 scripts/run_benchmark.py run-compare --config configs/pilot_codex.toml --split eval
 ```
 
+Materialize the sampled `v0.1` benchmark from the curated upstream task manifest:
+
+```bash
+python3 scripts/run_benchmark.py prepare-v0_1
+```
+
+Build episodes for the sampled `v0.1` benchmark:
+
+```bash
+python3 scripts/run_benchmark.py build-episodes --config configs/v0_1_realistic_codex.toml
+```
+
+Run the Codex CLI baseline on the sampled `v0.1` benchmark:
+
+```bash
+python3 scripts/run_benchmark.py run-compare --config configs/v0_1_realistic_codex.toml --split eval
+```
+
 Outputs are written under per-agent directories, for example:
 
 ```text
 .runs/pilot_fixture/runs/toy-prompt-leak/
 .runs/pilot_codex/runs/codex/
+.runs/v0_1_realistic/runs/codex/
 ```
 
 Each agent run writes per-episode metrics plus:
@@ -146,15 +174,21 @@ interleave-codebench run-compare --config configs/pilot_fixture.toml --split eva
 
 ## Current Scope And Limitations
 
-This `v0` is intentionally narrow.
+The scope is still intentionally narrow.
 
 - The shipped datasets are toy fixtures shaped like `SWE-bench Verified` and `SWE-CI`, not official benchmark checkouts.
+- The sampled `v0.1` benchmark uses real upstream task IDs and commits, but it still is not the official benchmark harness. It verifies a curated local regression per task rather than replaying the full upstream Docker or CI stack.
 - The built-in baseline is deterministic and hand-written; external CLI agents are supported only through a one-action-per-slice JSON contract.
 - Only Python tasks are supported.
 - Only 2-task episodes are supported.
 - Interleaving is strict round robin only.
 - The benchmark focuses on interruption and resumption under bounded working context, not on benchmark-native multi-turn traces.
 - Prompt-token accounting remains a cheap estimate over the benchmark prompt bundle; it is not provider-native token usage from an external CLI agent.
+
+The current `v0.1` sampled task set includes:
+
+- `SWE-bench Verified`: `pallets__flask-5014`, `psf__requests-1921`, `psf__requests-5414`, `psf__requests-6028`
+- `SWE-CI`: `oauthlib__oauthlib__3bcbb2__bf0241`, `pygments__pygments__eeb568__35732f`, `modelcontextprotocol__python-sdk__281fd4__a9cc82`, `pydantic__pydantic-settings__e16290__0497ef`
 
 ## Research Context
 

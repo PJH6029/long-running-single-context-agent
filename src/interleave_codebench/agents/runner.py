@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import shlex
 import shutil
 import subprocess
+import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,6 +52,7 @@ class RepoAgentRunner:
     def run_mixed_episode(
         self, episode: MixedEpisode, *, memory_backend: MemoryBackend, output_root: str | Path
     ) -> EpisodeMetrics:
+        started_at = time.perf_counter()
         run_root = ensure_directory(Path(output_root) / memory_backend.name / episode.episode_id)
         workspace_root = ensure_directory(run_root / "workspaces")
         task_states = self._prepare_task_states(episode.tasks, workspace_root, run_root)
@@ -56,6 +60,7 @@ class RepoAgentRunner:
 
         prompt_tokens_per_slice: list[int] = []
         stale_memory_errors = 0
+        policy_error_count = 0
         action_fingerprints: dict[str, list[str]] = {task.task_id: [] for task in episode.tasks}
         last_active_task_id: str | None = None
 
@@ -66,7 +71,37 @@ class RepoAgentRunner:
             if last_active_task_id and last_active_task_id != state.task_id and state.action_count > 0:
                 state.resume_count += 1
             prompt = memory_backend.build_prompt(state.task_id, task_states)
-            action = self.policy.next_action(memory_backend.task_specs[state.task_id], state, prompt)
+            decision = self.policy.next_action(memory_backend.task_specs[state.task_id], state, prompt)
+            if decision.error or decision.action is None:
+                state.action_count += 1
+                state.status = "policy_error"
+                state.done = True
+                state.last_result = decision.error or "Agent policy returned no action."
+                state.history.append(
+                    {
+                        "step_idx": event.step_idx,
+                        "action_kind": "policy_error",
+                        "observation": state.last_result,
+                    }
+                )
+                prompt_tokens_per_slice.append(prompt.estimated_tokens)
+                stale_memory_errors += int(prompt.contains_inactive_task_history)
+                policy_error_count += 1
+                memory_backend.append_event(
+                    state.task_id,
+                    "assistant",
+                    json.dumps(
+                        {
+                            "policy_error": state.last_result,
+                            "details": decision.details,
+                        },
+                        indent=2,
+                    ),
+                )
+                memory_backend.sync_task_state(state, task_states)
+                last_active_task_id = state.task_id
+                continue
+            action = decision.action
             execution = self._execute_action(memory_backend.task_specs[state.task_id], state, action, prompt)
             state.action_count += 1
             state.status = "finished" if action.kind == "finish" else "running"
@@ -99,6 +134,8 @@ class RepoAgentRunner:
             evaluations=evaluations,
             prompt_tokens_per_slice=prompt_tokens_per_slice,
             stale_memory_errors=stale_memory_errors,
+            policy_error_count=policy_error_count,
+            wall_clock_seconds=time.perf_counter() - started_at,
             action_fingerprints=action_fingerprints,
         )
         write_json(run_root / "episode_metrics.json", metrics.to_dict())
@@ -126,7 +163,14 @@ class RepoAgentRunner:
 
     def _run_setup(self, task_spec: TaskSpec, workspace: Path) -> None:
         for command in task_spec.setup_cmds:
-            subprocess.run(command, shell=True, cwd=workspace, check=True, capture_output=True, text=True)
+            subprocess.run(
+                self._normalize_command(command),
+                shell=True,
+                cwd=workspace,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
     def _execute_action(
         self, task_spec: TaskSpec, task_state: TaskState, action: AgentAction, prompt
@@ -169,10 +213,11 @@ class RepoAgentRunner:
         )
 
     def _run_command(self, workspace: Path, command: str) -> str:
-        result = subprocess.run(command, shell=True, cwd=workspace, capture_output=True, text=True)
+        normalized = self._normalize_command(command)
+        result = subprocess.run(normalized, shell=True, cwd=workspace, capture_output=True, text=True)
         return "\n".join(
             [
-                f"command={command}",
+                f"command={normalized}",
                 f"returncode={result.returncode}",
                 result.stdout.strip(),
                 result.stderr.strip(),
@@ -185,13 +230,14 @@ class RepoAgentRunner:
             raise ValueError(f"Unsupported eval harness type: {harness.get('type')}")
         details = self._run_command(task_state.workspace, harness["command"])
         passed = "returncode=0" in details.splitlines()[:2]
+        finished = task_state.status == "finished"
         task_state.eval_passed = passed
-        task_state.score = 1.0 if passed and task_state.done else 0.0
+        task_state.score = 1.0 if passed and finished else 0.0
         return TaskEvaluation(
             task_id=task_spec.task_id,
             eval_passed=passed,
-            finished=task_state.done,
-            success=passed and task_state.done,
+            finished=finished,
+            success=passed and finished,
             score=task_state.score,
             details=details,
         )
@@ -205,6 +251,8 @@ class RepoAgentRunner:
         evaluations: list[TaskEvaluation],
         prompt_tokens_per_slice: list[int],
         stale_memory_errors: int,
+        policy_error_count: int,
+        wall_clock_seconds: float,
         action_fingerprints: dict[str, list[str]],
     ) -> EpisodeMetrics:
         success_count = sum(1 for item in evaluations if item.success)
@@ -218,6 +266,7 @@ class RepoAgentRunner:
         return EpisodeMetrics(
             episode_id=episode.episode_id,
             memory_mode=memory_mode,
+            agent_name=self.policy.name,
             per_task=evaluations,
             total_slices=sum(state.action_count for state in task_states.values()),
             per_task_slices={task_id: state.action_count for task_id, state in task_states.items()},
@@ -225,11 +274,21 @@ class RepoAgentRunner:
             cumulative_prompt_tokens=sum(prompt_tokens_per_slice),
             duplicate_work_rate=duplicate_work_rate,
             stale_memory_errors=stale_memory_errors,
+            policy_error_count=policy_error_count,
             unfinished_task_abandonment_rate=unfinished / max(1, len(task_states)),
+            wall_clock_seconds=wall_clock_seconds,
             both_tasks_solved=success_count == len(task_states),
             one_task_solved=success_count == 1,
             zero_tasks_solved=success_count == 0,
         )
+
+    def _normalize_command(self, command: str) -> str:
+        stripped = command.lstrip()
+        if stripped == "python" or stripped.startswith("python "):
+            leading = command[: len(command) - len(stripped)]
+            suffix = stripped[len("python") :]
+            return f"{leading}{shlex.quote(sys.executable)}{suffix}"
+        return command
 
 
 def build_memory_backend(mode: str, root_dir: str | Path, *, tail_events: int = 6) -> MemoryBackend:

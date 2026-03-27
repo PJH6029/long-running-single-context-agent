@@ -20,7 +20,9 @@ This repo currently contains a `v0` pilot benchmark for interleaved coding tasks
   - `shared`: one global transcript for the whole mixed episode
   - `filesystem`: one persistent task-memory directory per task
 - Runner: a lightweight repo-agent loop with read, edit, test, shell, and finish actions
-- Policy: a deterministic `ToyPromptLeakPolicy` that makes cross-task prompt contamination observable
+- Agent modes:
+  - `toy`: deterministic `ToyPromptLeakPolicy` used for the built-in memory baseline
+  - `external_cli_json`: any CLI agent that can return one JSON action per slice, with `codex exec` shipped as the first config example
 
 This is intentionally a pilot scaffold, not a leaderboard-ready benchmark release.
 
@@ -97,33 +99,49 @@ related_works/
 
 ## Quickstart
 
-The intended environment for this repo is the `single-context-agent` conda environment.
+The fixture benchmark has no Python package dependencies, so the repo can be run directly with `python3`.
 
 Run the test suite:
 
 ```bash
-conda run -n single-context-agent python scripts/run_tests.py
+python3 scripts/run_tests.py
 ```
 
 Build deterministic mixed episodes from the pilot fixtures:
 
 ```bash
-conda run -n single-context-agent python scripts/run_benchmark.py build-episodes --config configs/pilot_fixture.toml
+python3 scripts/run_benchmark.py build-episodes --config configs/pilot_fixture.toml
 ```
 
-Compare shared-transcript memory against filesystem task memory on the eval split:
+Run the built-in toy baseline and compare shared-transcript memory against filesystem task memory on the eval split:
 
 ```bash
-conda run -n single-context-agent python scripts/run_benchmark.py run-compare --config configs/pilot_fixture.toml --split eval
+python3 scripts/run_benchmark.py run-compare --config configs/pilot_fixture.toml --split eval
 ```
 
-Outputs are written under `.runs/pilot_fixture/`.
+Run the Codex CLI baseline on the same fixture benchmark:
+
+```bash
+python3 scripts/run_benchmark.py run-compare --config configs/pilot_codex.toml --split eval
+```
+
+Outputs are written under per-agent directories, for example:
+
+```text
+.runs/pilot_fixture/runs/toy-prompt-leak/
+.runs/pilot_codex/runs/codex/
+```
+
+Each agent run writes per-episode metrics plus:
+
+- `comparison-<split>.json`
+- `summary-<split>.json`
 
 If you want the CLI installed as a package entrypoint instead of using the wrapper script:
 
 ```bash
-conda run -n single-context-agent python -m pip install -e .
-conda run -n single-context-agent interleave-codebench run-compare --config configs/pilot_fixture.toml --split eval
+python3 -m pip install -e .
+interleave-codebench run-compare --config configs/pilot_fixture.toml --split eval
 ```
 
 ## Current Scope And Limitations
@@ -131,11 +149,12 @@ conda run -n single-context-agent interleave-codebench run-compare --config conf
 This `v0` is intentionally narrow.
 
 - The shipped datasets are toy fixtures shaped like `SWE-bench Verified` and `SWE-CI`, not official benchmark checkouts.
-- The current agent policy is deterministic and hand-written; it is not yet an LLM-driven repo agent.
+- The built-in baseline is deterministic and hand-written; external CLI agents are supported only through a one-action-per-slice JSON contract.
 - Only Python tasks are supported.
 - Only 2-task episodes are supported.
 - Interleaving is strict round robin only.
 - The benchmark focuses on interruption and resumption under bounded working context, not on benchmark-native multi-turn traces.
+- Prompt-token accounting remains a cheap estimate over the benchmark prompt bundle; it is not provider-native token usage from an external CLI agent.
 
 ## Research Context
 

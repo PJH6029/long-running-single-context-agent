@@ -121,6 +121,7 @@ class TaskEvaluation:
 class EpisodeMetrics:
     episode_id: str
     memory_mode: str
+    agent_name: str
     per_task: list[TaskEvaluation]
     total_slices: int
     per_task_slices: dict[str, int]
@@ -128,7 +129,9 @@ class EpisodeMetrics:
     cumulative_prompt_tokens: int
     duplicate_work_rate: float
     stale_memory_errors: int
+    policy_error_count: int
     unfinished_task_abandonment_rate: float
+    wall_clock_seconds: float
     both_tasks_solved: bool
     one_task_solved: bool
     zero_tasks_solved: bool
@@ -137,4 +140,3 @@ class EpisodeMetrics:
         payload = asdict(self)
         payload["per_task"] = [item.to_dict() for item in self.per_task]
         return payload
-

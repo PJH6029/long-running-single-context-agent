@@ -1,0 +1,39 @@
+[benchmarks.swe_bench_verified]
+dataset_path = "tests/fixtures/swe_bench_verified/tasks.json"
+
+[benchmarks.swe_ci]
+dataset_path = "tests/fixtures/swe_ci/tasks.csv"
+
+[pilot]
+dev_episodes = 4
+eval_episodes = 4
+seed = 7
+max_total_actions = 8
+max_actions_per_task = 4
+slice_budget = 1
+
+[runner]
+output_dir = ".runs/pilot_codex"
+memory_tail_events = 6
+
+[agent]
+kind = "external_cli_json"
+name = "codex"
+command = [
+  "codex",
+  "exec",
+  "--skip-git-repo-check",
+  "--ephemeral",
+  "--sandbox",
+  "read-only",
+  "--color",
+  "never",
+  "--output-schema",
+  "{schema_path}",
+  "-o",
+  "{response_path}",
+  "-C",
+  "{workspace_path}",
+  "-"
+]
+timeout_seconds = 180

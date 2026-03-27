@@ -3,10 +3,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .agents.policies import ToyPromptLeakPolicy
+from .agents.policies import build_agent_policy
 from .agents.runner import RepoAgentRunner, build_memory_backend
 from .bench.adapters import SWEBenchVerifiedAdapter, SWECIAdapter
 from .bench.mixers import PilotEpisodeBuilder
+from .bench.types import EpisodeMetrics
 from .config import load_config
 from .utils import ensure_directory, read_json, write_json
 
@@ -71,8 +72,8 @@ def run_single(config_path: str, source: str, task_id: str, memory_mode: str) ->
     )
     tasks = adapter.load_tasks()
     task = next(item for item in tasks if item.task_id == task_id)
-    runner = RepoAgentRunner(ToyPromptLeakPolicy())
-    output_dir = ensure_directory(Path(config.output_dir) / "runs")
+    runner = RepoAgentRunner(build_agent_policy(config.agent))
+    output_dir = _agent_output_dir(config)
     metrics = runner.run_single_task(
         task,
         memory_backend=build_memory_backend(
@@ -98,8 +99,8 @@ def run_mixed(config_path: str, split: str, episode_id: str, memory_mode: str) -
     from .bench.types import MixedEpisode
 
     episode = MixedEpisode.from_dict(episode_payload)
-    runner = RepoAgentRunner(ToyPromptLeakPolicy())
-    output_dir = ensure_directory(Path(config.output_dir) / "runs")
+    runner = RepoAgentRunner(build_agent_policy(config.agent))
+    output_dir = _agent_output_dir(config)
     metrics = runner.run_mixed_episode(
         episode,
         memory_backend=build_memory_backend(
@@ -120,9 +121,11 @@ def run_compare(config_path: str, split: str) -> Path:
     if not episode_file.exists():
         build_episodes(config_path)
     payload = read_json(episode_file)
-    runner = RepoAgentRunner(ToyPromptLeakPolicy())
-    output_dir = ensure_directory(Path(config.output_dir) / "runs")
+    runner = RepoAgentRunner(build_agent_policy(config.agent))
+    output_dir = _agent_output_dir(config)
     comparisons = []
+    shared_metrics: list[EpisodeMetrics] = []
+    filesystem_metrics: list[EpisodeMetrics] = []
     from .bench.types import MixedEpisode
 
     for episode_payload in payload[split]:
@@ -134,6 +137,7 @@ def run_compare(config_path: str, split: str) -> Path:
             ),
             output_root=output_dir,
         )
+        shared_metrics.append(shared)
         filesystem = runner.run_mixed_episode(
             episode,
             memory_backend=build_memory_backend(
@@ -141,10 +145,12 @@ def run_compare(config_path: str, split: str) -> Path:
             ),
             output_root=output_dir,
         )
+        filesystem_metrics.append(filesystem)
         shared_success = sum(1 for item in shared.per_task if item.success)
         filesystem_success = sum(1 for item in filesystem.per_task if item.success)
         comparisons.append(
             {
+                "agent_name": runner.policy.name,
                 "episode_id": episode.episode_id,
                 "shared_path": str(output_dir / "shared_transcript" / episode.episode_id / "episode_metrics.json"),
                 "filesystem_path": str(output_dir / "filesystem_per_task" / episode.episode_id / "episode_metrics.json"),
@@ -153,10 +159,50 @@ def run_compare(config_path: str, split: str) -> Path:
             }
         )
     result_path = output_dir / f"comparison-{split}.json"
+    summary_path = output_dir / f"summary-{split}.json"
     write_json(result_path, comparisons)
+    write_json(
+        summary_path,
+        {
+            "agent_name": runner.policy.name,
+            "split": split,
+            "shared_transcript": _summarize_mode(shared_metrics),
+            "filesystem_per_task": _summarize_mode(filesystem_metrics),
+        },
+    )
     return result_path
+
+
+def _agent_output_dir(config) -> Path:
+    return ensure_directory(Path(config.output_dir) / "runs" / config.agent.slug)
+
+
+def _summarize_mode(metrics: list[EpisodeMetrics]) -> dict[str, float | int]:
+    if not metrics:
+        return {
+            "episodes": 0,
+            "episodes_both_tasks_solved": 0,
+            "task_success_total": 0,
+            "average_cumulative_prompt_tokens": 0.0,
+            "average_stale_memory_errors": 0.0,
+            "average_duplicate_work_rate": 0.0,
+            "average_wall_clock_seconds": 0.0,
+            "policy_error_count": 0,
+        }
+    episode_count = len(metrics)
+    task_success_total = sum(sum(1 for item in metric.per_task if item.success) for metric in metrics)
+    return {
+        "episodes": episode_count,
+        "episodes_both_tasks_solved": sum(metric.both_tasks_solved for metric in metrics),
+        "task_success_total": task_success_total,
+        "average_cumulative_prompt_tokens": sum(metric.cumulative_prompt_tokens for metric in metrics)
+        / episode_count,
+        "average_stale_memory_errors": sum(metric.stale_memory_errors for metric in metrics) / episode_count,
+        "average_duplicate_work_rate": sum(metric.duplicate_work_rate for metric in metrics) / episode_count,
+        "average_wall_clock_seconds": sum(metric.wall_clock_seconds for metric in metrics) / episode_count,
+        "policy_error_count": sum(metric.policy_error_count for metric in metrics),
+    }
 
 
 if __name__ == "__main__":
     main()
-

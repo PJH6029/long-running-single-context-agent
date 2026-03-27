@@ -16,3 +16,6 @@ slice_budget = 1
 output_dir = ".runs/pilot_fixture"
 memory_tail_events = 6
 
+[agent]
+kind = "toy"
+name = "toy-prompt-leak"
